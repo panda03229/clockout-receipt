@@ -1,0 +1,16 @@
+{
+  "name": "퇴근 영수증",
+  "short_name": "퇴근 영수증",
+  "description": "오늘 번 돈이 초 단위로 쌓이고, 퇴근하면 영수증 한 장으로 남아요.",
+  "lang": "ko",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#D9DFDB",
+  "theme_color": "#1F6B57",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

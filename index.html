@@ -1,0 +1,609 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>퇴근 영수증</title>
+<meta name="description" content="오늘 번 돈이 초 단위로 쌓이고, 퇴근하면 영수증 한 장으로 남아요.">
+<meta name="theme-color" content="#1F6B57">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="퇴근 영수증">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" type="image/png" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gothic+A1:wght@400;600;800;900&family=Nanum+Gothic+Coding:wght@400;700&display=swap">
+<style>
+/* Layout: two columns on desktop — the live wage meter and controls on the left, a thermal-paper receipt pinned on the right; a month of receipts underneath. Stacks to one column on phones. */
+:root {
+  --bg: #D9DFDB;
+  --surface: #EEF2EF;
+  --ink: #1C2320;
+  --muted: #5B6862;
+  --line: #C3CCC7;
+  --accent: #1F6B57;
+  --accent-soft: #D3E5DE;
+  --red: #C8243F;
+  /* the receipt is a physical object and stays light in both themes */
+  --paper: #FBFBF7;
+  --paper-ink: #1E2321;
+  --paper-muted: #6E7672;
+  --f-display: "Gothic A1", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  --f-body: "Gothic A1", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  --f-receipt: "Nanum Gothic Coding", "D2Coding", ui-monospace, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #111613; --surface: #1A211D; --ink: #E3EAE6; --muted: #92A099; --line: #2B3530;
+    --accent: #5FC2A3; --accent-soft: #1D3A30; --red: #FF5C76;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #111613; --surface: #1A211D; --ink: #E3EAE6; --muted: #92A099; --line: #2B3530;
+  --accent: #5FC2A3; --accent-soft: #1D3A30; --red: #FF5C76;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html { padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); background: var(--bg); -webkit-text-size-adjust: 100%; }
+img { max-width: 100%; }
+body {
+  margin: 0;
+  background: var(--bg); color: var(--ink); font-family: var(--f-body); font-size: 15px; line-height: 1.55;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 28px 64px;
+}
+.page { max-width: 1040px; margin: 0 auto; display: flex; flex-direction: column; gap: 36px; }
+.top { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 32px; align-items: start; }
+@media (max-width: 820px) { .top { grid-template-columns: minmax(0, 1fr); } }
+
+h1 { font-family: var(--f-display); font-weight: 900; font-size: 28px; margin: 0; letter-spacing: -0.5px; }
+.sub { color: var(--muted); font-size: 14px; margin: 2px 0 0; }
+
+/* meter */
+.left { display: flex; flex-direction: column; gap: 22px; min-width: 0; }
+.meter { display: flex; flex-direction: column; gap: 6px; }
+.phase { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; color: var(--accent); }
+.phase .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+.phase.live .dot { animation: blink 1.2s infinite; }
+.phase.off { color: var(--muted); } .phase.off .dot { background: var(--muted); }
+.phase.ot { color: var(--red); } .phase.ot .dot { background: var(--red); }
+@keyframes blink { 50% { opacity: .25; } }
+.money { font-family: var(--f-display); font-weight: 900; font-size: clamp(44px, 9vw, 76px); line-height: 1; letter-spacing: -2px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.money small { font-size: .4em; letter-spacing: 0; margin-right: 4px; color: var(--muted); font-weight: 800; }
+.rate { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.bar { height: 8px; background: var(--surface); border-radius: 99px; overflow: hidden; margin-top: 8px; }
+.bar i { display: block; height: 100%; background: var(--accent); border-radius: 99px; width: 0; transition: width .5s linear; }
+.bar-legend { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+.controls { display: flex; flex-wrap: wrap; gap: 8px; }
+button { font: inherit; font-weight: 700; font-size: 14px; border: 0; border-radius: 10px; padding: 11px 16px; cursor: pointer; background: var(--surface); color: var(--ink); }
+button:hover { background: var(--accent-soft); }
+button:focus-visible, input:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+button.primary { background: var(--accent); color: var(--surface); }
+button.primary:hover { filter: brightness(1.08); background: var(--accent); }
+button.on { background: var(--red); color: var(--paper); }
+button[disabled] { opacity: .45; cursor: default; }
+
+/* things you've earned */
+.items h2, .settings h2, .archive h2 { font-size: 12px; font-weight: 800; letter-spacing: .1em; color: var(--muted); margin: 0 0 10px; }
+.next { font-size: 15px; margin: 0 0 8px; }
+.next b { color: var(--accent); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { font-size: 13px; padding: 5px 10px; border-radius: 99px; background: var(--surface); color: var(--muted); font-variant-numeric: tabular-nums; }
+.chip.got { background: var(--accent-soft); color: var(--accent); font-weight: 700; }
+
+/* settings */
+.settings { background: var(--surface); border-radius: 14px; padding: 16px 18px; }
+.settings .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 12px; }
+.field { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); font-weight: 600; min-width: 0; }
+.field input[type="number"], .field input[type="time"] { font: inherit; font-size: 16px; font-weight: 700; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; width: 100%; font-variant-numeric: tabular-nums; }
+.check { flex-direction: row; align-items: center; gap: 8px; font-size: 14px; color: var(--ink); align-self: end; padding-bottom: 8px; }
+.hint { font-size: 12px; color: var(--muted); margin: 10px 0 0; }
+.hint.example { color: var(--red); font-weight: 700; }
+
+/* receipt column */
+.right { display: flex; flex-direction: column; gap: 12px; position: sticky; top: calc(16px + env(safe-area-inset-top, 0px)); }
+@media (max-width: 820px) { .right { position: static; } }
+.receipt-wrap { filter: drop-shadow(0 14px 22px rgba(20, 30, 25, .22)); }
+.receipt { background: var(--paper); color: var(--paper-ink); font-family: var(--f-receipt); font-size: 13px; line-height: 1.55; padding: 22px 22px 18px; position: relative; }
+.zig { height: 10px; background: linear-gradient(135deg, var(--paper) 5px, transparent 0) 0 0 / 10px 10px repeat-x, linear-gradient(225deg, var(--paper) 5px, transparent 0) 0 0 / 10px 10px repeat-x; }
+.zig.top { transform: rotate(180deg); }
+.r-photo { display: block; width: 100%; margin: 0 0 14px; border-radius: 2px; image-rendering: pixelated; }
+.r-head { text-align: center; display: flex; flex-direction: column; gap: 2px; }
+.r-head .store { font-weight: 700; font-size: 18px; letter-spacing: .05em; }
+.r-small { font-size: 11px; color: var(--paper-muted); }
+.r-rule { border: 0; border-top: 1px dashed var(--paper-muted); margin: 12px 0; }
+.r-rule.double { border-top: 3px double var(--paper-ink); }
+.r-row { display: flex; justify-content: space-between; gap: 10px; font-variant-numeric: tabular-nums; }
+.r-row span:first-child { min-width: 0; }
+.r-row .q { color: var(--paper-muted); }
+.r-total { font-size: 18px; font-weight: 700; }
+.r-red { color: #C8243F; }
+.r-memo { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.r-buys { display: flex; flex-direction: column; gap: 2px; }
+.barcode { display: flex; justify-content: center; align-items: stretch; height: 44px; gap: 0; margin: 14px 0 4px; }
+.barcode i { display: block; background: var(--paper-ink); }
+.barcode b { display: block; }
+.r-foot { text-align: center; }
+.stamp { position: absolute; right: 18px; top: 46%; width: 92px; height: 92px; border: 3px solid #C8243F; border-radius: 50%; color: #C8243F; display: flex; flex-direction: column; align-items: center; justify-content: center; transform: rotate(-14deg); font-family: var(--f-display); font-weight: 900; font-size: 18px; line-height: 1.1; opacity: .85; }
+.stamp small { font-size: 10px; font-weight: 600; }
+.r-empty { text-align: center; color: var(--paper-muted); padding: 30px 0; }
+
+.r-tools { display: flex; flex-direction: column; gap: 8px; }
+.r-tools .row2 { display: flex; gap: 8px; flex-wrap: wrap; }
+.r-tools .row2 > * { flex: 1 1 140px; }
+.file-btn { position: relative; overflow: hidden; display: inline-flex; align-items: center; justify-content: center; font-weight: 700; font-size: 14px; border-radius: 10px; padding: 11px 16px; background: var(--surface); cursor: pointer; }
+.file-btn:hover { background: var(--accent-soft); }
+.file-btn input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.file-btn:focus-within { outline: 3px solid var(--accent); outline-offset: 2px; }
+#memo { font: inherit; font-size: 14px; width: 100%; resize: vertical; min-height: 44px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); padding: 10px 12px; }
+.toast { font-size: 13px; color: var(--accent); font-weight: 700; min-height: 1.2em; margin: 0; }
+
+/* archive */
+.arch-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+.arch-head h2 { margin: 0; }
+.month-nav { display: flex; align-items: center; gap: 6px; }
+.month-nav button { padding: 6px 12px; }
+.month-nav strong { font-variant-numeric: tabular-nums; min-width: 84px; text-align: center; }
+.sum { display: flex; gap: 24px; flex-wrap: wrap; margin-bottom: 14px; }
+.sum div { display: flex; flex-direction: column; }
+.sum span { font-size: 12px; color: var(--muted); font-weight: 600; }
+.sum b { font-family: var(--f-display); font-weight: 900; font-size: 22px; font-variant-numeric: tabular-nums; }
+.sum b.red { color: var(--red); }
+.cal { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; }
+.dow { font-size: 11px; color: var(--muted); text-align: center; font-weight: 700; }
+.cell { aspect-ratio: 3 / 4; max-width: 100%; border-radius: 8px; background: var(--surface); border: 0; padding: 6px; display: flex; flex-direction: column; justify-content: space-between; align-items: flex-start; text-align: left; font-weight: 600; background-size: cover; background-position: center; position: relative; overflow: hidden; min-width: 0; }
+.cell.blank { background: transparent; pointer-events: none; }
+.cell .n { font-size: 12px; position: relative; z-index: 1; }
+.cell .v { font-size: 11px; font-variant-numeric: tabular-nums; position: relative; z-index: 1; color: var(--accent); font-weight: 800; }
+.cell.photo::after { content: ""; position: absolute; inset: 0; background: linear-gradient(transparent 40%, rgba(0,0,0,.55)); }
+.cell.photo .n, .cell.photo .v { color: #fff; }
+.cell.today { outline: 2px solid var(--accent); outline-offset: -2px; }
+.cell.sel { outline: 3px solid var(--red); outline-offset: -3px; }
+.cell:hover { filter: brightness(1.05); }
+.foot { font-size: 12px; color: var(--muted); }
+
+@media (prefers-reduced-motion: reduce) { .phase.live .dot { animation: none; } .bar i { transition: none; } }
+</style>
+</head>
+<body>
+
+<div class="page">
+  <div class="top">
+    <div class="left">
+      <header>
+        <h1>퇴근 영수증</h1>
+        <p class="sub">오늘 번 돈이 초 단위로 쌓이고, 퇴근하면 영수증 한 장으로 남아요.</p>
+      </header>
+
+      <section class="meter" aria-live="off">
+        <span class="phase live" id="phase"><span class="dot"></span><span id="phaseText">근무 중</span></span>
+        <div class="money" id="money"><small>₩</small>0</div>
+        <div class="rate" id="rate">초당 ₩0 · 시급 ₩0</div>
+        <div class="bar"><i id="barFill"></i></div>
+        <div class="bar-legend"><span id="barStart">09:00 출근</span><span id="barEnd">18:00 퇴근</span></div>
+      </section>
+
+      <div class="controls">
+        <button type="button" id="lupinBtn">월급루팡 시작</button>
+        <button type="button" id="otBtn" hidden>야근 시작</button>
+        <button type="button" class="primary" id="issueBtn">영수증 발행</button>
+      </div>
+
+      <section class="items">
+        <h2>오늘 번 돈으로</h2>
+        <p class="next" id="nextItem"></p>
+        <div class="chips" id="chips"></div>
+      </section>
+
+      <section class="settings">
+        <h2>내 근무 조건</h2>
+        <div class="grid">
+          <label class="field">연봉 (만원)<input type="number" id="salary" min="0" step="100" inputmode="numeric"></label>
+          <label class="field">출근<input type="time" id="start"></label>
+          <label class="field">퇴근<input type="time" id="end"></label>
+          <label class="field check"><input type="checkbox" id="lunch"> 점심 1시간 무급</label>
+        </div>
+        <p class="hint" id="settingsHint"></p>
+      </section>
+    </div>
+
+    <aside class="right">
+      <div class="receipt-wrap">
+        <div class="zig top"></div>
+        <div class="receipt" id="receipt"></div>
+        <div class="zig"></div>
+      </div>
+      <div class="r-tools" id="tools">
+        <textarea id="memo" rows="2" maxlength="140" placeholder="오늘 한 줄 (영수증 아래에 찍혀요)"></textarea>
+        <div class="row2">
+          <label class="file-btn">오늘 사진 올리기<input type="file" id="photo" accept="image/*"></label>
+          <button type="button" id="saveImg">이미지로 저장·공유</button>
+        </div>
+        <p class="toast" id="toast"></p>
+      </div>
+    </aside>
+  </div>
+
+  <section class="archive">
+    <div class="arch-head">
+      <h2>영수증 보관함</h2>
+      <div class="month-nav">
+        <button type="button" id="prevM" aria-label="이전 달">‹</button>
+        <strong id="monthLabel"></strong>
+        <button type="button" id="nextM" aria-label="다음 달">›</button>
+      </div>
+    </div>
+    <div class="sum">
+      <div><span>이번 달 번 돈</span><b id="sumEarn">₩0</b></div>
+      <div><span>영수증</span><b id="sumCount">0장</b></div>
+      <div><span>월급루팡으로 번 돈</span><b class="red" id="sumLupin">₩0</b></div>
+    </div>
+    <div class="cal" id="cal"></div>
+  </section>
+
+  <p class="foot">시급은 연봉 ÷ 12 ÷ 209시간(주 40시간 + 주휴 기준 월 소정근로시간)으로 계산해요. 연장근로는 1.5배예요. 세전 금액이고, 물건 가격은 대략치예요. 기록은 이 기기에만 저장돼요.</p>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script>
+(() => {
+  const KEY = "clockoutReceipt.v1";
+  const MONTH_HOURS = 209;
+  const ITEMS = [
+    [1500, "삼각김밥", "개"], [4500, "아메리카노", "잔"], [11000, "국밥", "그릇"], [15000, "영화 한 편", "편"],
+    [17000, "넷플릭스 한 달", "달"], [23000, "치킨", "마리"], [80000, "오마카세 런치", "번"], [359000, "에어팟 프로", "개"]
+  ];
+  const $ = id => document.getElementById(id);
+  const pad = n => String(n).padStart(2, "0");
+  const ymd = d => d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate());
+  const won = n => "₩" + Math.floor(n).toLocaleString("ko-KR");
+  const shortWon = n => n >= 10000 ? (n / 10000).toFixed(n >= 100000 ? 0 : 1) + "만" : Math.floor(n).toLocaleString("ko-KR");
+  function dur(sec) {
+    sec = Math.max(0, Math.floor(sec));
+    const h = Math.floor(sec / 3600), m = Math.floor(sec / 60) % 60;
+    return h ? `${h}시간 ${pad(m)}분` : `${m}분`;
+  }
+
+  // ---------- state ----------
+  const DEFAULTS = { salary: 4800, start: "09:00", end: "18:00", lunch: true, example: true };
+  let S = { settings: { ...DEFAULTS }, days: {} };
+
+  // everything lives in one IndexedDB record (photos make it too big for localStorage)
+  const idb = new Promise((resolve, reject) => {
+    const req = indexedDB.open("clockout-receipt", 1);
+    req.onupgradeneeded = () => req.result.createObjectStore("kv");
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+  async function idbGet(key) {
+    const db = await idb;
+    return new Promise((res, rej) => { const r = db.transaction("kv").objectStore("kv").get(key); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); });
+  }
+  let saveTimer;
+  function saveLocal() {
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(async () => {
+      try {
+        const db = await idb;
+        db.transaction("kv", "readwrite").objectStore("kv").put(S, KEY);
+      } catch (e) { toast("기기에 저장하지 못했어요. 저장 공간을 확인해 주세요."); }
+    }, 300);
+  }
+
+  let today = ymd(new Date());
+  let selected = today;
+  let viewMonth = new Date(); viewMonth.setDate(1);
+
+  const dayObj = date => (S.days[date] = S.days[date] || { date, lupinSec: 0, lupinStart: null, otSec: 0, otStart: null, photo: null, memo: "", issued: false });
+
+  // ---------- wage math ----------
+  const perSec = s => (s.salary * 10000) / 12 / MONTH_HOURS / 3600;
+  function at(date, hhmm) { const [h, m] = hhmm.split(":").map(Number); const d = new Date(date + "T00:00:00"); d.setHours(h, m, 0, 0); return d.getTime(); }
+  const overlap = (a, b, c, d) => Math.max(0, Math.min(b, d) - Math.max(a, c));
+
+  function live(date, now) {
+    const s = S.settings, d = dayObj(date);
+    const start = at(date, s.start);
+    let end = at(date, s.end); if (end <= start) end += 86400000;
+    const lunchA = at(date, "12:00"), lunchB = at(date, "13:00");
+    const t = Math.min(now, end);
+    const span = Math.max(0, t - start);
+    const lunchMs = s.lunch ? overlap(start, t, lunchA, lunchB) : 0;
+    const paidSec = (span - lunchMs) / 1000;
+    const otSec = d.otSec + (d.otStart ? (now - d.otStart) / 1000 : 0);
+    const lupinSec = d.lupinSec + (d.lupinStart ? (now - d.lupinStart) / 1000 : 0);
+    const ps = perSec(s);
+    const base = paidSec * ps, ot = otSec * ps * 1.5;
+    let phase = "work";
+    if (now < start) phase = "before";
+    else if (s.lunch && now >= lunchA && now < lunchB && now < end) phase = "lunch";
+    else if (now >= end) phase = d.otStart ? "ot" : "after";
+    const fullSec = ((end - start) - (s.lunch ? overlap(start, end, lunchA, lunchB) : 0)) / 1000;
+    return { start, end, paidSec, lunchSec: lunchMs / 1000, otSec, lupinSec, perSec: ps, base, ot, total: base + ot, lupin: lupinSec * ps, phase, fullSec };
+  }
+  // figures for the receipt: live for today, stored for past days
+  function figures(date) {
+    if (date === today) return live(date, Date.now());
+    const d = S.days[date];
+    if (!d || d.earned == null) return null;
+    return { paidSec: d.paidSec, lunchSec: d.lunchSec, otSec: d.otSec, lupinSec: d.lupinSec, perSec: d.perSec, base: d.paidSec * d.perSec, ot: d.otSec * d.perSec * 1.5, total: d.earned, lupin: d.lupinSec * d.perSec };
+  }
+
+  // ---------- persistence ----------
+  const persist = () => saveLocal();
+  const saveSettings = () => saveLocal();
+  function saveDay(date) {
+    const d = dayObj(date);
+    if (date === today) {
+      const f = live(date, Date.now());
+      Object.assign(d, { paidSec: Math.round(f.paidSec), lunchSec: Math.round(f.lunchSec), perSec: f.perSec, earned: Math.round(f.total), start: S.settings.start, end: S.settings.end });
+    }
+    persist("d-" + date, { ...d });
+  }
+
+  // ---------- receipt ----------
+  function barcode(seed) {
+    let h = 2166136261; for (const c of seed) { h ^= c.charCodeAt(0); h = Math.imul(h, 16777619); }
+    let html = "";
+    for (let i = 0; i < 46; i++) { h ^= h << 13; h ^= h >>> 17; h ^= h << 5; const w = 1 + ((h >>> 0) % 3), g = 1 + ((h >>> 8) % 2); html += `<i style="width:${w}px"></i><b style="width:${g}px"></b>`; }
+    return html;
+  }
+  function esc(s) { const div = document.createElement("div"); div.textContent = s; return div.innerHTML; }
+
+  function renderReceipt() {
+    const el = $("receipt");
+    const f = figures(selected);
+    const d = S.days[selected];
+    const dt = new Date(selected + "T00:00:00");
+    const days = ["일", "월", "화", "수", "목", "금", "토"];
+    const isToday = selected === today;
+    const nowStr = isToday ? `${pad(new Date().getHours())}:${pad(new Date().getMinutes())}` : (d && d.end) || "";
+    const head = `
+      ${d && d.photo ? `<img class="r-photo" src="${d.photo}" alt="그날의 사진">` : ""}
+      <div class="r-head">
+        <span class="store">주식회사 나</span>
+        <span class="r-small">대표 나 · 사업장 내 자리</span>
+        <span class="r-small">${dt.getFullYear()}.${pad(dt.getMonth() + 1)}.${pad(dt.getDate())}(${days[dt.getDay()]}) ${nowStr}</span>
+      </div>`;
+    if (!f) {
+      el.innerHTML = head + `<hr class="r-rule"><div class="r-empty">이 날은 발행된 영수증이 없어요.</div>`;
+      return;
+    }
+    const hourly = f.perSec * 3600;
+    const buys = ITEMS.filter(([p]) => f.total >= p).slice(-2).reverse()
+      .map(([p, name, unit]) => `<div class="r-row"><span>${name}</span><span>${Math.floor(f.total / p)}${unit}</span></div>`).join("");
+    el.innerHTML = head + `
+      <hr class="r-rule">
+      <div class="r-row q"><span>품목</span><span>금액</span></div>
+      <hr class="r-rule">
+      <div class="r-row"><span>정규 근무 ${dur(f.paidSec)}</span><span>${won(f.base)}</span></div>
+      <div class="r-row q"><span>&nbsp;@ 시급 ${won(hourly)}</span><span></span></div>
+      ${f.lunchSec > 0 ? `<div class="r-row"><span>점심시간 ${dur(f.lunchSec)} (무급)</span><span>₩0</span></div>` : ""}
+      ${f.otSec > 0 ? `<div class="r-row"><span>연장근로 ${dur(f.otSec)} ×1.5</span><span>${won(f.ot)}</span></div>` : ""}
+      <hr class="r-rule double">
+      <div class="r-row r-total"><span>합계</span><span>${won(f.total)}</span></div>
+      ${f.lupinSec >= 60 ? `<div class="r-row r-red"><span>&nbsp;└ 월급루팡 ${dur(f.lupinSec)}</span><span>${won(f.lupin)}</span></div>` : ""}
+      <hr class="r-rule">
+      ${buys ? `<div class="r-small">오늘 번 돈으로 살 수 있는 것</div><div class="r-buys">${buys}</div><hr class="r-rule">` : ""}
+      ${d && d.memo ? `<p class="r-memo">${esc(d.memo)}</p><hr class="r-rule">` : ""}
+      <div class="barcode">${barcode(selected + (S.settings.salary || 0))}</div>
+      <div class="r-foot r-small">No. ${selected.replace(/-/g, "")}-${String(Math.round(f.total)).slice(-4).padStart(4, "0")}<br>세전 금액입니다 · 내일도 출근하세요</div>
+      ${d && d.issued ? `<div class="stamp">퇴근<small>${(d.issuedAt || "")}</small></div>` : ""}`;
+  }
+
+  // ---------- meter ----------
+  function renderMeter() {
+    const f = live(today, Date.now());
+    const s = S.settings;
+    $("money").innerHTML = `<small>₩</small>${Math.floor(f.total).toLocaleString("ko-KR")}`;
+    $("rate").textContent = `초당 ₩${f.perSec.toFixed(2)} · 시급 ${won(f.perSec * 3600)}`;
+    $("barFill").style.width = Math.min(100, (f.paidSec / Math.max(1, f.fullSec)) * 100) + "%";
+    $("barStart").textContent = `${s.start} 출근`;
+    $("barEnd").textContent = `${s.end} 퇴근`;
+    const ph = $("phase"), txt = $("phaseText");
+    const left = sec => dur(sec);
+    const now = Date.now();
+    ph.className = "phase";
+    if (f.phase === "before") { ph.classList.add("off"); txt.textContent = `출근 전 · 출근까지 ${left((f.start - now) / 1000)}`; }
+    else if (f.phase === "lunch") { ph.classList.add("off"); txt.textContent = "점심시간 · 지금은 무급이에요"; }
+    else if (f.phase === "work") { ph.classList.add("live"); txt.textContent = `근무 중 · 퇴근까지 ${left((f.end - now) / 1000)}`; }
+    else if (f.phase === "ot") { ph.classList.add("ot", "live"); txt.textContent = `야근 중 · 1.5배로 버는 중 (${dur(f.otSec)})`; }
+    else { ph.classList.add("off"); txt.textContent = "퇴근 시간이 지났어요"; }
+
+    const d = dayObj(today);
+    const lb = $("lupinBtn");
+    lb.disabled = !(f.phase === "work" || f.phase === "ot");
+    lb.classList.toggle("on", !!d.lupinStart);
+    lb.textContent = d.lupinStart ? `루팡 끝내기 (${dur((now - d.lupinStart) / 1000)} · ${won(((now - d.lupinStart) / 1000) * f.perSec)})` : "월급루팡 시작";
+    const ob = $("otBtn");
+    ob.hidden = !(f.phase === "after" || f.phase === "ot");
+    ob.classList.toggle("on", !!d.otStart);
+    ob.textContent = d.otStart ? "야근 끝" : "야근 시작";
+    $("issueBtn").textContent = d.issued ? "영수증 다시 발행" : "영수증 발행";
+
+    // items
+    const nextIdx = ITEMS.findIndex(([p]) => f.total < p);
+    $("nextItem").innerHTML = nextIdx < 0
+      ? "오늘 <b>에어팟 프로</b>까지 벌었어요."
+      : `다음 목표 <b>${ITEMS[nextIdx][1]}</b>까지 ${won(ITEMS[nextIdx][0] - f.total)} · 약 ${dur((ITEMS[nextIdx][0] - f.total) / f.perSec)}`;
+    $("chips").innerHTML = ITEMS.map(([p, name, unit]) => {
+      const n = Math.floor(f.total / p);
+      return `<span class="chip${n ? " got" : ""}">${name} ${n ? n + unit : "₩" + p.toLocaleString("ko-KR")}</span>`;
+    }).join("");
+  }
+
+  // ---------- archive ----------
+  function renderArchive() {
+    const y = viewMonth.getFullYear(), m = viewMonth.getMonth();
+    $("monthLabel").textContent = `${y}년 ${m + 1}월`;
+    const first = new Date(y, m, 1).getDay(), last = new Date(y, m + 1, 0).getDate();
+    const cal = $("cal");
+    cal.innerHTML = ["일", "월", "화", "수", "목", "금", "토"].map(d => `<div class="dow">${d}</div>`).join("");
+    let sum = 0, count = 0, lupin = 0;
+    for (let i = 0; i < first; i++) cal.insertAdjacentHTML("beforeend", `<div class="cell blank"></div>`);
+    for (let day = 1; day <= last; day++) {
+      const key = `${y}-${pad(m + 1)}-${pad(day)}`;
+      const d = S.days[key];
+      const has = d && d.earned != null;
+      if (has) { sum += d.earned; count++; lupin += (d.lupinSec || 0) * (d.perSec || 0); }
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "cell" + (key === today ? " today" : "") + (key === selected ? " sel" : "") + (d && d.photo ? " photo" : "");
+      if (d && d.photo) btn.style.backgroundImage = `url("${d.photo}")`;
+      btn.innerHTML = `<span class="n">${day}</span><span class="v">${has ? shortWon(d.earned) : ""}</span>`;
+      btn.setAttribute("aria-label", `${m + 1}월 ${day}일${has ? " " + won(d.earned) : ""}`);
+      btn.addEventListener("click", () => { selected = key; renderReceipt(); renderTools(); renderArchive(); });
+      cal.appendChild(btn);
+    }
+    $("sumEarn").textContent = won(sum);
+    $("sumCount").textContent = count + "장";
+    $("sumLupin").textContent = won(lupin);
+  }
+
+  function renderTools() {
+    const d = S.days[selected];
+    const editable = selected === today || (d && d.earned != null);
+    $("memo").disabled = !editable;
+    $("photo").disabled = !editable;
+    $("memo").value = (d && d.memo) || "";
+  }
+
+  function renderSettings() {
+    const s = S.settings;
+    $("salary").value = s.salary; $("start").value = s.start; $("end").value = s.end; $("lunch").checked = !!s.lunch;
+    const h = $("settingsHint");
+    h.className = "hint" + (s.example ? " example" : "");
+    h.textContent = s.example ? "지금은 예시 값(연봉 4,800만 원)이에요. 내 연봉으로 바꿔 보세요." : "이 조건은 내 기록에만 쓰이고 다른 사람에게 보이지 않아요.";
+  }
+
+  let toastTimer;
+  function toast(t) { $("toast").textContent = t; clearTimeout(toastTimer); toastTimer = setTimeout(() => $("toast").textContent = "", 3500); }
+
+  // ---------- events ----------
+  ["salary", "start", "end", "lunch"].forEach(id => $(id).addEventListener("change", () => {
+    const s = S.settings;
+    s.salary = Math.max(0, Number($("salary").value) || 0);
+    s.start = $("start").value || s.start; s.end = $("end").value || s.end; s.lunch = $("lunch").checked;
+    s.example = false;
+    saveSettings(); renderSettings(); renderMeter(); renderReceipt();
+  }));
+
+  $("lupinBtn").addEventListener("click", () => {
+    const d = dayObj(today), now = Date.now();
+    if (d.lupinStart) { d.lupinSec += (now - d.lupinStart) / 1000; d.lupinStart = null; toast("루팡 기록을 남겼어요."); }
+    else d.lupinStart = now;
+    saveDay(today); renderMeter(); renderReceipt(); renderArchive();
+  });
+  $("otBtn").addEventListener("click", () => {
+    const d = dayObj(today), now = Date.now();
+    if (d.otStart) { d.otSec += (now - d.otStart) / 1000; d.otStart = null; }
+    else d.otStart = now;
+    saveDay(today); renderMeter(); renderReceipt(); renderArchive();
+  });
+  $("issueBtn").addEventListener("click", () => {
+    const d = dayObj(today), now = new Date();
+    if (d.lupinStart) { d.lupinSec += (now - d.lupinStart) / 1000; d.lupinStart = null; }
+    if (d.otStart) { d.otSec += (now - d.otStart) / 1000; d.otStart = null; }
+    d.issued = true; d.issuedAt = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
+    selected = today;
+    saveDay(today); renderMeter(); renderReceipt(); renderTools(); renderArchive();
+    toast("영수증을 발행했어요. 보관함에 저장됐어요.");
+  });
+
+  let memoTimer;
+  $("memo").addEventListener("input", () => {
+    dayObj(selected).memo = $("memo").value;
+    renderReceipt();
+    clearTimeout(memoTimer); memoTimer = setTimeout(() => saveDay(selected), 800);
+  });
+
+  // photo → small dithered black-and-white image, like a thermal print
+  $("photo").addEventListener("change", e => {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        const W = 360, H = Math.round(Math.min(img.height / img.width, 1.25) * W);
+        const c = document.createElement("canvas"); c.width = W; c.height = H;
+        const ctx = c.getContext("2d");
+        const srcH = (H / W) * img.width;
+        ctx.drawImage(img, 0, Math.max(0, (img.height - srcH) / 2), img.width, srcH, 0, 0, W, H);
+        const px = ctx.getImageData(0, 0, W, H), a = px.data;
+        const g = new Float32Array(W * H);
+        for (let i = 0; i < W * H; i++) { const v = 0.299 * a[i * 4] + 0.587 * a[i * 4 + 1] + 0.114 * a[i * 4 + 2]; g[i] = Math.min(255, Math.max(0, (v - 128) * 1.25 + 140)); }
+        for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+          const i = y * W + x, o = g[i], n = o < 128 ? 0 : 255, err = o - n; g[i] = n;
+          if (x + 1 < W) g[i + 1] += err * 7 / 16;
+          if (y + 1 < H) { if (x > 0) g[i + W - 1] += err * 3 / 16; g[i + W] += err * 5 / 16; if (x + 1 < W) g[i + W + 1] += err / 16; }
+        }
+        for (let i = 0; i < W * H; i++) { const v = g[i] ? 251 : 30; a[i * 4] = v; a[i * 4 + 1] = v; a[i * 4 + 2] = v - (g[i] ? 4 : 0); a[i * 4 + 3] = 255; }
+        ctx.putImageData(px, 0, 0);
+        let url = c.toDataURL("image/png");
+        if (url.length > 180000) url = c.toDataURL("image/jpeg", 0.7);
+        dayObj(selected).photo = url;
+        saveDay(selected); renderReceipt(); renderArchive();
+        toast("사진을 영수증에 찍었어요.");
+      };
+      img.onerror = () => toast("이 파일은 사진으로 읽을 수 없어요. JPG나 PNG로 올려 주세요.");
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+    e.target.value = "";
+  });
+
+  // phone: share sheet (save to Photos, Instagram story); desktop: plain download
+  $("saveImg").addEventListener("click", async () => {
+    if (!window.html2canvas) { toast("이미지 도구를 불러오지 못했어요. 인터넷 연결을 확인해 주세요."); return; }
+    try {
+      const canvas = await html2canvas(document.querySelector(".receipt-wrap"), { scale: 3, backgroundColor: null });
+      const blob = await new Promise(r => canvas.toBlob(r, "image/png"));
+      const name = `퇴근영수증-${selected}.png`;
+      const file = new File([blob], name, { type: "image/png" });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file], title: "퇴근 영수증" });
+        return;
+      }
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob); a.download = name;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+      toast("이미지를 저장했어요.");
+    } catch (e) {
+      if (e && e.name === "AbortError") return;
+      toast("이미지를 만들지 못했어요. 잠시 뒤 다시 눌러 주세요.");
+    }
+  });
+
+  $("prevM").addEventListener("click", () => { viewMonth.setMonth(viewMonth.getMonth() - 1); renderArchive(); });
+  $("nextM").addEventListener("click", () => { viewMonth.setMonth(viewMonth.getMonth() + 1); renderArchive(); });
+
+  // ---------- boot ----------
+  function renderAll() { renderSettings(); renderMeter(); renderReceipt(); renderTools(); renderArchive(); }
+  renderAll();
+  idbGet(KEY).then(saved => {
+    if (saved) { S = { settings: { ...DEFAULTS, ...saved.settings }, days: saved.days || {} }; renderAll(); }
+    if (navigator.storage && navigator.storage.persist) navigator.storage.persist();
+  }).catch(() => toast("저장된 기록을 불러오지 못했어요."));
+  setInterval(() => {
+    const t = ymd(new Date());
+    if (t !== today) { if (selected === today) selected = t; today = t; renderAll(); return; }
+    renderMeter();
+    if (selected === today && new Date().getSeconds() % 5 === 0) renderReceipt();
+  }, 1000);
+
+  if ("serviceWorker" in navigator && location.protocol !== "file:") {
+    navigator.serviceWorker.register("sw.js").catch(() => {});
+  }
+})();
+</script>
+</body>
+</html>
